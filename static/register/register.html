@@ -1,0 +1,49 @@
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="stylesheet" href="register/register.css">
+    <link rel="stylesheet" href="../sidebar.css">
+</head>
+
+<body>
+    <div class="sidebar">
+        <h2 class="sidebar-logo">MyProject</h2>
+        <nav class="sidebar-nav">
+            <a href="/">Home</a>
+            <a href="/register">Register</a>
+            <a href="/login">Login</a>
+            <a href="/profile">Your Profile</a>
+        </nav>
+    </div>
+    <div class="register-container">
+        <form class="register-form" id="register-form">
+            <h2>Create an Account</h2>
+            <div class="form-group">
+                <label for="name">Email</label>
+                <input type="text" id="name" name="name" placeholder="Enter your name" required>
+            </div>
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" placeholder="Enter email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" placeholder="Enter password" required>
+            </div>
+
+            <div class="form-group">
+                <label for="confirm">Confirm Password</label>
+                <input type="password" id="confirm" name="confirm" placeholder="Confirm password" required>
+            </div>
+
+            <button id="register-button" type="submit" class="register-btn">Register</button>
+            <p class="login-text">Already have an account? <a href="/login">Login</a></p>
+        </form>
+    </div>
+    <script src="register/register.js"></script>
+</body>
+
+</html>

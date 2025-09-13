@@ -1,0 +1,25 @@
+#loggedInContent,
+#notLoggedInContent {
+    display: none;
+}
+
+/* Main content wrapper */
+.content {
+    margin-left: 250px;
+    /* same as sidebar width */
+    padding: 1.0rem;
+    min-height: 100vh;
+    /* full viewport height */
+    background-color: #f8fafc;
+    /* optional background */
+    color: #1e293b;
+    /* default text color */
+}
+
+/* Responsive adjustment for small screens */
+@media (max-width: 768px) {
+    .content {
+        margin-left: 0;
+        padding: 1rem;
+    }
+}

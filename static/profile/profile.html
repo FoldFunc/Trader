@@ -1,12 +1,12 @@
-<!doctype html>
-<html lang="en">
+<html>
 
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Trader</title>
-    <link rel="stylesheet" href="index.css">
+    <link rel="stylesheet" href="profile/profile.css">
     <link rel="stylesheet" href="../sidebar.css">
+    <script src="profile/profile.js"></script>
+    <script src="profile/getName.js"></script>
 </head>
 
 <body>
@@ -18,6 +18,15 @@
             <a href="/login">Login</a>
             <a href="/profile">Your Profile</a>
         </nav>
+    </div>
+    <div id="loggedInContent" class="content">
+        <h1 id="greeting"></h1>
+        <form action="/createPortfolio" method="get">
+            <button type="submit">Create a new Portfolio</button>
+        </form>
+    </div>
+    <div id="notLoggedInContent">
+        <h1>Please log in to see your profile</h1>
     </div>
 </body>
 
