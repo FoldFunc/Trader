@@ -5,12 +5,12 @@ import (
 	"log"
 
 	"github.com/gofiber/fiber/v2"
-	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type resStruct struct {
 	Code         int    `json:"code"`
-	Message      string `json:"message,omitempty"`
+	Message      any    `json:"message,omitempty"`
 	ErrorMessage string `json:"errormessage,omitempty"`
 }
 
@@ -37,14 +37,71 @@ type loginReqStruct struct {
 type createPortfolioReqStruct struct {
 	PortfolioName string `json:"portfolioname"`
 }
+type fetchPortfoliosReqStruct struct {
+	PortfolioNames []string `json:"portfolionames"`
+}
+type portfolios struct {
+	Portfolios []portfolio `json:"portfolios"`
+}
+type portfolio struct {
+	Id     int    `json:"id"`
+	Owner  string `json:"owner"`
+	Name   string `json:"name"`
+	Money  int    `json:"money"`
+	Stocks string `json:"stocks"` // this will be fun
+}
 
+func fetchPortfoliosDB(email string, c *fiber.Ctx) (portfolios, error) {
+	var portfolioss portfolios
+	rows, err := DB.Query(context.Background(),
+		"SELECT * FROM portfolios WHERE owner=$1", email)
+	if err != nil {
+		log.Println("Error checking db: ", err)
+		return *new(portfolios), err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var portfolioo portfolio
+		if err := rows.Scan(&portfolioo.Id, &portfolioo.Owner, &portfolioo.Name, &portfolioo.Money, &portfolioo.Stocks); err != nil {
+			log.Println("Error in scaning rows: ", err)
+			return *new(portfolios), err
+		}
+		portfolioss.Portfolios = append(portfolioss.Portfolios, portfolioo)
+	}
+	if rows.Err() != nil {
+		log.Println("Error in rows")
+		return *new(portfolios), rows.Err()
+	}
+	return portfolioss, nil
+}
+func fetchPortfolioNamesDB(email string, c *fiber.Ctx) ([]string, error) {
+	var names []string
+	rows, err := DB.Query(context.Background(),
+		"SELECT name FROM portfolios WHERE owner=$1", email)
+	if err != nil {
+		log.Println("Error checking db: ", err)
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			return nil, err
+		}
+		names = append(names, name)
+	}
+	if rows.Err() != nil {
+		return nil, rows.Err()
+	}
+	return names, nil
+}
 func fetchNameDB(email string, c *fiber.Ctx) (string, error) {
 	var name string
 	err := DB.QueryRow(context.Background(),
 		"SELECT name FROM users WHERE email=$1", email).Scan(&name)
 	if err != nil {
 		log.Println("Error checking db: ", err)
-		return "", res(resStruct{Code: 500, ErrorMessage: "DB error"}, c)
+		return "", err
 	}
 	return name, nil
 }
@@ -54,10 +111,10 @@ func loginCheckDB(req loginReqStruct, c *fiber.Ctx) error {
 		"SELECT EXISTS(SELECT 1 FROM users WHERE email=$1)", req.Email).Scan(&exsists)
 	if err != nil {
 		log.Println("Error checking db: ", err)
-		return res(resStruct{Code: 500, ErrorMessage: "DB error"}, c)
+		return err
 	}
 	if !exsists {
-		return res(resStruct{Code: 404, ErrorMessage: "User Not found"}, c)
+		return err
 	}
 	var row loginReqStruct
 	err = DB.QueryRow(context.Background(),
@@ -65,19 +122,19 @@ func loginCheckDB(req loginReqStruct, c *fiber.Ctx) error {
 		Scan(&row.Email, &row.Password)
 	if err != nil {
 		log.Println("Error checking db: ", err)
-		return res(resStruct{Code: 500, ErrorMessage: "DB error"}, c)
+		return err
 	}
 	if row.Password != req.Password {
-		return res(resStruct{Code: 400, ErrorMessage: "Invalid credentials"}, c)
+		return err
 	}
 	_, err = DB.Exec(context.Background(),
 		"UPDATE users SET logged=$2 WHERE email=$1",
 		req.Email, true)
 	if err != nil {
 		log.Println("Error updating db:", err)
-		return res(resStruct{Code: 500, ErrorMessage: "DB error"}, c)
+		return err
 	}
-	return res(resStruct{Code: 200, ErrorMessage: "Logged in"}, c)
+	return nil
 }
 func logCheckDB(email string, c *fiber.Ctx) (bool, error) {
 	var is bool
@@ -85,11 +142,11 @@ func logCheckDB(email string, c *fiber.Ctx) (bool, error) {
 		"SELECT logged FROM users WHERE email=$1", email).Scan(&is)
 	if err != nil {
 		log.Println("Error checking db:", err)
-		return false, res(resStruct{Code: 500, ErrorMessage: "DB error"}, c)
+		return false, err
 	}
 	return is, nil
 }
-func addPortfolioToDB(email string, req createPortfolioReqStruct, c *fiber.Ctx) error {
+func addPortfolioToDB(email string, req createPortfolioReqStruct, c *fiber.Ctx) (string, error) {
 	log.Println("email: ", email)
 	log.Println("req.PortfolioName", req.PortfolioName)
 	var exists bool
@@ -97,19 +154,20 @@ func addPortfolioToDB(email string, req createPortfolioReqStruct, c *fiber.Ctx) 
 		"SELECT EXISTS(SELECT 1 FROM portfolios WHERE owner=$1 AND name=$2)", email, req.PortfolioName).Scan(&exists)
 	if err != nil {
 		log.Println("Error checking db:", err)
-		return res(resStruct{Code: 500, ErrorMessage: "DB error"}, c)
+		return "error", err
 	}
+	log.Println("exsists: ", exists)
 	if exists {
-		return res(resStruct{Code: 400, ErrorMessage: "Portfolio with that name alredy exists"}, c)
+		return "error", err
 	}
 	_, err = DB.Exec(context.Background(),
 		"INSERT INTO portfolios (owner, name, money, stocks) VALUES ($1, $2, $3, $4)",
-		email, req.PortfolioName, 100, nil)
+		email, req.PortfolioName, 100, "")
 	if err != nil {
 		log.Println("Error inserting to db:", err)
-		return res(resStruct{Code: 500, ErrorMessage: "DB error"}, c)
+		return "error", err
 	}
-	return nil
+	return "", nil
 }
 func registerAddToDB(req registerReqStruct, c *fiber.Ctx) error {
 	var exists bool
@@ -117,47 +175,72 @@ func registerAddToDB(req registerReqStruct, c *fiber.Ctx) error {
 		"SELECT EXISTS(SELECT 1 FROM users WHERE email=$1)", req.Email).Scan(&exists)
 	if err != nil {
 		log.Println("Error checking db:", err)
-		return res(resStruct{Code: 500, ErrorMessage: "DB error"}, c)
+		return err
 	}
 	if exists {
-		return res(resStruct{Code: 400, ErrorMessage: "User already exists"}, c)
+		return err
 	}
-
 	_, err = DB.Exec(context.Background(),
 		"INSERT INTO users (email, password, name, logged) VALUES ($1, $2, $3, $4)",
 		req.Email, req.Password, req.Name, false)
 	if err != nil {
 		log.Println("Error inserting to db:", err)
-		return res(resStruct{Code: 500, ErrorMessage: "DB error"}, c)
+		return err
 	}
 	return nil
 }
 
-// TODO: Returns status 201 no matter what.
 func createPortfolioFunc(c *fiber.Ctx) error {
 	log.Println("createPortfolioFunc called")
 	cookie := c.Cookies("session")
 	if cookie == "" {
+		log.Println("No cookie")
 		return res(resStruct{Code: 400, Message: "No cookie found"}, c)
 	}
 	req := new(createPortfolioReqStruct)
 	if err := c.BodyParser(req); err != nil {
+		log.Println("Body parser error: ", err)
 		return res(resStruct{Code: 400, ErrorMessage: "Invalid body of the request."}, c)
 	}
-	if err := addPortfolioToDB(cookie, *req, c); err != nil {
-		return err
+	if string, err := addPortfolioToDB(cookie, *req, c); string != "" {
+		log.Println("addPortfolioToDB error: ", err)
+		return res(resStruct{Code: 500, ErrorMessage: "Internal server error"}, c)
 	}
 	return res(resStruct{Code: 201, Message: "Portfolio craeted."}, c)
+}
+func fetchPortfolios(c *fiber.Ctx) error {
+	log.Println("fetchPortfolios called")
+	cookie := c.Cookies("session")
+	if cookie == "" {
+		return res(resStruct{Code: 400, ErrorMessage: "No cookie found"}, c)
+	}
+	infos, err := fetchPortfoliosDB(cookie, c)
+	if err != nil {
+		return res(resStruct{Code: 500, ErrorMessage: "Internal server error"}, c)
+	}
+	return res(resStruct{Code: 200, Message: infos}, c)
+}
+func fetchPortfolioNames(c *fiber.Ctx) error {
+	log.Println("fetchPortfolioNames called")
+	cookie := c.Cookies("session")
+	if cookie == "" {
+		return res(resStruct{Code: 400, ErrorMessage: "No cookie found"}, c)
+	}
+	names, err := fetchPortfolioNamesDB(cookie, c)
+	if err != nil {
+		return res(resStruct{Code: 500, ErrorMessage: "Internal server error"}, c)
+	}
+	return res(resStruct{Code: 200, Message: names}, c)
 }
 func fetchNameFunc(c *fiber.Ctx) error {
 	log.Println("fetchNameFunc called")
 	cookie := c.Cookies("session")
 	if cookie == "" {
-		return res(resStruct{Code: 400, Message: "No cookie found"}, c)
+		return res(resStruct{Code: 400, ErrorMessage: "No cookie found"}, c)
 	}
 	name, err := fetchNameDB(cookie, c)
 	if err != nil {
-		return err
+		return res(resStruct{Code: 500, ErrorMessage: "Internal server error"}, c)
 	}
 	return res(resStruct{Code: 200, Message: name}, c)
 }
@@ -169,7 +252,7 @@ func logCheckFunc(c *fiber.Ctx) error {
 	}
 	is, err := logCheckDB(cookie, c)
 	if err != nil {
-		return err
+		return res(resStruct{Code: 500, ErrorMessage: "Internal server error"}, c)
 	}
 	if is {
 		return res(resStruct{Code: 200, Message: "true"}, c)
@@ -183,7 +266,7 @@ func loginFunc(c *fiber.Ctx) error {
 		return res(resStruct{Code: 400, ErrorMessage: "Invalid body of the request."}, c)
 	}
 	if err := loginCheckDB(*req, c); err != nil {
-		return err
+		return res(resStruct{Code: 500, ErrorMessage: "Interanal server error"}, c)
 	}
 	c.Cookie(&fiber.Cookie{
 		Name:     "session",
@@ -203,17 +286,17 @@ func registerFunc(c *fiber.Ctx) error {
 		return res(resStruct{Code: 400, ErrorMessage: "Invalid body of the request."}, c)
 	}
 	if err := registerAddToDB(*req, c); err != nil {
-		return err
+		return res(resStruct{Code: 500, ErrorMessage: "Internal server error"}, c)
 	}
 	return res(resStruct{Code: 201, Message: "User created."}, c)
 }
 
-var DB *pgx.Conn
+var DB *pgxpool.Pool
 
 func setupDB() {
 	connstring := "postgres://fold:1234@localhost:5432/trader"
 	var err error
-	DB, err = pgx.Connect(context.Background(), connstring)
+	DB, err = pgxpool.New(context.Background(), connstring)
 	if err != nil {
 		log.Fatal("Unable to connect to the db:", err)
 	}
@@ -235,7 +318,7 @@ func setupDB() {
 			owner TEXT NOT NULL,
 			name TEXT NOT NULL,
 			money INTEGER NOT NULL,
-			stocks TEXT
+			stocks TEXT NOT NULL
 		)`)
 	if err != nil {
 		log.Fatal("Failed to migrate the db:", err)
@@ -244,7 +327,7 @@ func setupDB() {
 
 func main() {
 	setupDB()
-	defer DB.Close(context.Background())
+	defer DB.Close()
 
 	app := fiber.New()
 	app.Get("/sidebar.css", func(c *fiber.Ctx) error {
@@ -268,5 +351,7 @@ func main() {
 	app.Post("/api/createPortfolio", createPortfolioFunc)
 	app.Get("/api/logcheck", logCheckFunc)
 	app.Get("/api/fetch/name", fetchNameFunc)
+	app.Get("/api/fetch/portfolioNames", fetchPortfolioNames)
+	app.Get("/api/fetch/portfolios", fetchPortfolios)
 	log.Fatal(app.Listen(":42069"))
 }

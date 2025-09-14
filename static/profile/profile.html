@@ -20,10 +20,15 @@
         </nav>
     </div>
     <div id="loggedInContent" class="content">
-        <h1 id="greeting"></h1>
+        <div class="title">
+            <h1 id="greeting"></h1>
+        </div>
         <form action="/createPortfolio" method="get">
             <button type="submit">Create a new Portfolio</button>
         </form>
+        <div id="portfolio-container">
+        </div>
+        <script src="profile/getPortfolios.js"></script>
     </div>
     <div id="notLoggedInContent">
         <h1>Please log in to see your profile</h1>
